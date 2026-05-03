@@ -13,7 +13,10 @@ from pathlib import Path
 from tkinter import *
 from tkinter import ttk, filedialog, messagebox
 
-SCRIPT_DIR = Path(__file__).parent.resolve()
+if getattr(sys, 'frozen', False):
+    SCRIPT_DIR = Path(sys.executable).parent.resolve()
+else:
+    SCRIPT_DIR = Path(__file__).parent.resolve()
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
@@ -26,11 +29,15 @@ import pixiv_download as dl
 class StdoutRedirector:
     def __init__(self, q):
         self.q = q
-        self._s = sys.stdout
+        self._s = sys.stdout or None  # --windowed 模式下 stdout 可能为 None
     def write(self, t):
-        self._s.write(t); self._s.flush(); self.q.put(t)
+        if self._s:
+            self._s.write(t)
+            self._s.flush()
+        self.q.put(t)
     def flush(self):
-        self._s.flush()
+        if self._s:
+            self._s.flush()
 
 class StdoutCtx:
     def __init__(self, r):
@@ -526,27 +533,33 @@ class PixivGUI:
             messagebox.showerror("错误", "无法识别的 URL\n请使用 /artworks/ 或 /users/ 格式")
             return
 
-        if not dl.COOKIE_FILE.exists():
-            if not messagebox.askyesno("无 Cookie",
-                    "未设置 Cookie，R-18 内容无法下载\n\n确定继续吗？"):
-                return
-
-        dl.load_cookies()
         self._downloading = True
         self.btn_dl.config(text="下载中...", state=DISABLED)
         self._clear_log()
-        self._log_write(f">>> 开始下载: {url}\n{'='*55}\n")
 
         kind, item_id = result
 
+        # 在 worker 线程内部重定向 stdout，确保所有输出都被捕获
         def worker():
             try:
                 redir = StdoutRedirector(self.log_queue)
                 with StdoutCtx(redir):
+                    print(f">>> 开始下载: {url}")
+                    print("=" * 55)
+
+                    # 加载 Cookie 放在重定向之后，这样警告也会出现在日志里
+                    has_cookie = dl.COOKIE_FILE.exists()
+                    if not has_cookie:
+                        print("[提示] 未设置 Cookie，将以游客身份访问")
+                        print("      R-18 内容无法下载，部分作品可能返回 403")
+                    dl.load_cookies()
+
                     if kind == "artwork":
                         dl.download_artwork(item_id, self.save_path.get())
                     else:
                         dl.download_artist(item_id, self.save_path.get())
+            except Exception as e:
+                print(f"[致命错误] {e}")
             finally:
                 self.root.after(0, self._dl_done)
 

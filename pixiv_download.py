@@ -25,7 +25,12 @@ except ImportError:
 # ------------------------------------------------------------
 # 配置区
 # ------------------------------------------------------------
-SCRIPT_DIR = Path(__file__).parent.resolve()
+if getattr(sys, 'frozen', False):
+    # PyInstaller --onefile 模式：使用 exe 所在目录
+    SCRIPT_DIR = Path(sys.executable).parent.resolve()
+else:
+    # 源码运行模式：使用脚本所在目录
+    SCRIPT_DIR = Path(__file__).parent.resolve()
 COOKIE_FILE = SCRIPT_DIR / "pixiv_cookies.json"
 SAVE_FOLDER = Path.home() / "Downloads" / "Pixiv_Images"
 
@@ -320,7 +325,16 @@ def download_artwork(work_id: str, folder: str):
     try:
         data = get_artwork_metadata(work_id)
     except Exception as e:
-        print(f"  [错误] 无法获取作品信息: {e}")
+        msg = str(e)
+        print(f"  [错误] 无法获取作品信息")
+        if "403" in msg:
+            print(f"  [原因] 被 Pixiv 拒绝访问（403）")
+            if not COOKIE_FILE.exists():
+                print(f"  [解决] 请先到「Cookie 管理」标签页设置登录 Cookie")
+            else:
+                print(f"  [解决] Cookie 可能已失效，请重新导出并更新")
+        else:
+            print(f"  [详情] {msg}")
         return
 
     if data.get("error", False):
