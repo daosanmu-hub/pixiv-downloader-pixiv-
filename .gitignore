@@ -1,0 +1,23 @@
+# Pixiv Cookie（敏感信息，不要提交）
+pixiv_cookies.json
+pixiv_cookies.7z
+
+# GUI 设置（本地路径）
+gui_settings.json
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# PyInstaller 构建产物
+dist/
+build/
+*.spec
+
+# 调试日志
+gui_error.log
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
